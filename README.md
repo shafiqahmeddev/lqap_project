@@ -42,3 +42,62 @@ The LQAP system consists of four main entity types:
    ```bash
    git clone https://github.com/shafiqahmeddev/lqap-implementation.git
    cd lqap-implementation
+
+2. Set up a virtual environment:
+    ```bash
+    python -m venv venv
+    source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+3. Install dependencies:
+    ```bash
+    pip install -r requirements.txt
+
+4. Install the package in development mode:
+    ```bash
+    pip install -e .
+
+### running the System:
+
+1. Start the LQAP system:
+    ```bash
+    python run.py
+
+2. Run the dashboard:
+    ```bash
+    python run_dashboard.py
+
+3. Run a simulation:
+    ```bash
+    run_simulation.py
+
+### Testing and Evaluation
+
+1. Run the system test:
+    ```bash
+    python test_system.py
+
+2. Visualize anomaly detection:
+    ```bash
+    python visualize_anomalies.py
+
+3. Benchmark performance:
+    ```bash
+    python benchmark.py
+
+## Acknowledgements
+This project implements the architecture described in the paper "A Decentralized Blockchain-Based Federated Learning Architecture for Secure Multi-Domain V2G Networks" by Shafiq Ahmed and Mohammad Hossein Anisi.
+
+
+## Future Development Areas
+
+Now that you have a complete working LQAP system, here are some directions for further development:
+
+1. **Performance Optimization**: Identify and optimize bottlenecks in the system
+2. **Advanced UI**: Develop a more sophisticated dashboard with additional visualizations
+3. **Hardware Integration**: Explore options for integrating with real PUF hardware
+4. **Blockchain Enhancements**: Implement more sophisticated consensus mechanisms
+5. **Advanced Federated Learning**: Develop more sophisticated anomaly detection models
+6. **Mobile Application**: Create a mobile app for EV users
+7. **Real-world Testing**: Test the system in a real V2G environment
+
+Which of these areas would you like to explore next?
