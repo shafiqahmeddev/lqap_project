@@ -56,7 +56,7 @@ The LQAP system consists of four main entity types:
     ```bash
     pip install -e .
 
-### running the System:
+### Running the System:
 
 1. Start the LQAP system:
     ```bash
