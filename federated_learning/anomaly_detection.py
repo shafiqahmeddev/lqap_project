@@ -1,11 +1,6 @@
-import os
-import sys
-# Add the parent directory to the path so we can import from the same package
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-
 import numpy as np
 from federated_learning.base_model import FederatedLearningModel
+from scipy.stats import chi2
 
 class AnomalyDetectionModel(FederatedLearningModel):
     """Simple anomaly detection model using statistical methods"""
@@ -15,8 +10,9 @@ class AnomalyDetectionModel(FederatedLearningModel):
         
         # Initialize model parameters
         self.mean_vector = None
+        self.cov_matrix = None  # Added covariance matrix
         self.std_vector = None
-        self.threshold = 3.0  # Number of standard deviations for anomaly
+        self.threshold = 0.95  # Changed to use percentile
         self.feature_names = ['time_of_day', 'location', 'frequency', 'duration', 'power']
     
     def _extract_features(self, data):
@@ -26,22 +22,20 @@ class AnomalyDetectionModel(FederatedLearningModel):
             
         features = []
         for record in data:
-            # Extract features if available
-            if isinstance(record, dict):
-                feature_vector = [
-                    record.get('time_of_day', 0),
-                    record.get('location', 0),
-                    record.get('frequency', 0),
-                    record.get('duration', 0),
-                    record.get('power', 0)
-                ]
-                features.append(feature_vector)
-            else:
-                # Use random features for testing
-                features.append(np.random.random(5))
-        
+            base_features = [
+                record.get('time_of_day', 0),
+                record.get('location', 0),
+                record.get('frequency', 0),
+                record.get('duration', 0),
+                record.get('power', 0)
+            ]
+            # Add derived features
+            power_freq_ratio = base_features[4] / (base_features[2] + 1e-10)
+            duration_power = base_features[3] * base_features[4]
+            features.append(base_features + [power_freq_ratio, duration_power])
+            
         return np.array(features)
-    
+
     def train(self, data):
         """Train the model on local data"""
         features = self._extract_features(data)
@@ -49,24 +43,39 @@ class AnomalyDetectionModel(FederatedLearningModel):
         if features.size == 0:
             return False
         
-        # Calculate mean and standard deviation for each feature
+        # Calculate mean vector and covariance matrix
         self.mean_vector = np.mean(features, axis=0)
+        self.cov_matrix = np.cov(features, rowvar=False)
         self.std_vector = np.std(features, axis=0)
         
-        # Handle zero standard deviations
-        self.std_vector[self.std_vector == 0] = 1.0
+        # Handle numerical stability
+        self.cov_matrix += np.eye(self.cov_matrix.shape[0]) * 1e-6
+        self.std_vector[self.std_vector < 1e-6] = 1.0
+        
+        # Calculate Mahalanobis distances for training data
+        train_scores = self._compute_mahalanobis(features)
+        
+        # Set threshold based on chi-square distribution
+        self.threshold = chi2.ppf(0.95, df=features.shape[1])
         
         self.updated_at = __import__('time').time()
         self.version += 1
         
         return True
-    
+        
+    def _compute_mahalanobis(self, features):
+        # Calculate Mahalanobis distance for each point
+        diff = features - self.mean_vector
+        inv_cov = np.linalg.inv(self.cov_matrix)
+        left = np.dot(diff, inv_cov)
+        mahalanobis = np.sqrt(np.sum(left * diff, axis=1))
+        return mahalanobis
+        
     def predict(self, data):
-        """
-        Predict anomaly scores
+        """Predict anomaly scores
         Returns a score for each record, higher = more anomalous
         """
-        if self.mean_vector is None or self.std_vector is None:
+        if self.mean_vector is None or self.cov_matrix is None:
             return np.array([1.0] * len(data))  # Untrained model
         
         features = self._extract_features(data)
@@ -74,21 +83,18 @@ class AnomalyDetectionModel(FederatedLearningModel):
         if features.size == 0:
             return np.array([])
         
-        # Calculate z-scores
-        z_scores = np.abs((features - self.mean_vector) / self.std_vector)
+        # Compute Mahalanobis distances
+        distances = self._compute_mahalanobis(features)
         
-        # Maximum z-score across features
-        max_z_scores = np.max(z_scores, axis=1)
+        # Normalize scores to [0,1] range
+        scores = distances / self.threshold
+        scores = np.clip(scores, 0, 1)
         
-        # Normalize to 0-1 range
-        anomaly_scores = max_z_scores / self.threshold
-        anomaly_scores = np.clip(anomaly_scores, 0, 1)
+        return scores
         
-        return anomaly_scores
-    
     def get_model_parameters(self):
         """Get the model parameters"""
-        if self.mean_vector is None or self.std_vector is None:
+        if self.mean_vector is None or self.cov_matrix is None:
             return {
                 'version': self.version,
                 'updated_at': self.updated_at,
@@ -100,6 +106,7 @@ class AnomalyDetectionModel(FederatedLearningModel):
             'updated_at': self.updated_at,
             'trained': True,
             'mean_vector': self.mean_vector.tolist(),
+            'cov_matrix': self.cov_matrix.tolist(),
             'std_vector': self.std_vector.tolist(),
             'threshold': self.threshold
         }
@@ -111,6 +118,9 @@ class AnomalyDetectionModel(FederatedLearningModel):
         
         if 'mean_vector' in parameters:
             self.mean_vector = np.array(parameters['mean_vector'])
+        
+        if 'cov_matrix' in parameters:
+            self.cov_matrix = np.array(parameters['cov_matrix'])
         
         if 'std_vector' in parameters:
             self.std_vector = np.array(parameters['std_vector'])
